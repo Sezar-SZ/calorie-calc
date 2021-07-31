@@ -4,4 +4,5 @@ This app calculate daily calories that you have each day!
 
 ## TODO:
 
--   [ ] Design 2 pages: one for daily status and one for individual row
+-   [ ] Design top buttons
+-   [ ] Design buttom table
