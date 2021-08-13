@@ -1,6 +1,6 @@
 import "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     StyleSheet,
     Text,
@@ -9,6 +9,7 @@ import {
     TouchableOpacity,
     FlatList,
     SafeAreaView,
+    modal
 } from "react-native";
 
 import * as Font from "expo-font";
@@ -21,8 +22,10 @@ import { Feather } from "@expo/vector-icons";
 
 import { NavigationContainer } from "@react-navigation/native";
 
-export default function App() {
-    const [Data, SetData] = useState([
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const App = () => {
+    const [dailyData, setDailyData] = useState([
         { id: 1, title: "سیب", calorie: 111 },
         { id: 2, title: "موز", calorie: 222 },
         { id: 3, title: "خیار", calorie: 333 },
@@ -40,17 +43,51 @@ export default function App() {
         { id: 15, title: "خیار", calorie: 333 },
         { id: 16, title: "سیب", calorie: 111 },
         { id: 17, title: "موز", calorie: 222 },
-        { id: 18, title: "خیار", calorie: 333 },
     ]);
+    const [calorieData, setCalorieData] = useState();
+
+    const [doGetDailyCalories, setDoGetDailyCalories] = useState(false);
+
     I18nManager.forceRTL(false);
 
     const [loaded] = useFonts({
         IRANSans: require("./assets/fonts/IRANSans.ttf"),
     });
 
-    if (!loaded) {
-        return null;
-    }
+    // consoledebug(1);
+
+    //  daily data key -> @daily_data
+    //  calorie data key -> @calorie_data
+    const storeData = async (key, value) => {
+        try {
+            const jsonValue = JSON.stringify(value);
+            await AsyncStorage.setItem(key, jsonValue);
+            setCalorieData(jsonValue);
+        } catch (e) {
+            console.debug(e);
+        }
+    };
+
+    const getDailyData = async () => {
+        try {
+            var jsonValue = await AsyncStorage.getItem("@daily_data");
+            var result = [];
+            jsonValue = jsonValue ? JSON.parse(jsonValue) : [];
+            var id = 0;
+            for (let k in jsonValue) {
+                result.push({ id: id, title: k, calorie: jsonValue[k] });
+                id++;
+            }
+            console.debug(result);
+            setDailyData(result);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+    useEffect(() => {
+        console.debug(1);
+        getDailyData();
+    }, [doGetDailyCalories]);
 
     const renderItem = ({ item }) => (
         <TouchableOpacity>
@@ -61,13 +98,11 @@ export default function App() {
             </View>
         </TouchableOpacity>
     );
+    if (!loaded) {
+        return null;
+    }
 
     return (
-        // <NavigationContainer>
-        //     <View style={styles.container}>
-        //         <Text>Hello, World!</Text>
-        //     </View>
-        // </NavigationContainer>
         <SafeAreaView>
             <View style={styles.mainContainer}>
                 <View style={styles.calorieStatusContainer}>
@@ -108,17 +143,19 @@ export default function App() {
                         />
                     </TouchableOpacity>
                 </View>
-
+                <Text>{calorieData}</Text>
                 <FlatList
                     style={styles.listContainer}
-                    data={Data}
+                    data={dailyData}
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id.toString()}
                 />
             </View>
         </SafeAreaView>
     );
-}
+};
+
+export default App;
 
 const styles = StyleSheet.create({
     mainContainer: {
