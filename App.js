@@ -1,6 +1,6 @@
 import "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
     StyleSheet,
     Text,
@@ -8,8 +8,11 @@ import {
     I18nManager,
     TouchableOpacity,
     FlatList,
+    ScrollView,
     SafeAreaView,
-    modal
+    Modal,
+    TextInput,
+    useWindowDimensions,
 } from "react-native";
 
 import * as Font from "expo-font";
@@ -19,34 +22,38 @@ import { Ionicons } from "@expo/vector-icons";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { FontAwesome } from "@expo/vector-icons";
 import { Feather } from "@expo/vector-icons";
+import { Octicons } from "@expo/vector-icons";
 
 import { NavigationContainer } from "@react-navigation/native";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { set } from "react-native-reanimated";
 
 const App = () => {
-    const [dailyData, setDailyData] = useState([
-        { id: 1, title: "سیب", calorie: 111 },
-        { id: 2, title: "موز", calorie: 222 },
-        { id: 3, title: "خیار", calorie: 333 },
-        { id: 4, title: "سیب", calorie: 111 },
-        { id: 5, title: "موز", calorie: 222 },
-        { id: 6, title: "خیار", calorie: 333 },
-        { id: 7, title: "سیب", calorie: 111 },
-        { id: 8, title: "موز", calorie: 222 },
-        { id: 9, title: "خیار", calorie: 333 },
-        { id: 10, title: "سیب", calorie: 111 },
-        { id: 11, title: "موز", calorie: 222 },
-        { id: 12, title: "خیار", calorie: 333 },
-        { id: 13, title: "سیب", calorie: 111 },
-        { id: 14, title: "موز", calorie: 222 },
-        { id: 15, title: "خیار", calorie: 333 },
-        { id: 16, title: "سیب", calorie: 111 },
-        { id: 17, title: "موز", calorie: 222 },
-    ]);
-    const [calorieData, setCalorieData] = useState();
+    const [dailyLimitCalorie, setDailyLimitCalorie] = useState(1000);
+    const [takenCalorie, setTakenCalorie] = useState(0);
 
+    const [dailyData, setDailyData] = useState([]);
     const [doGetDailyCalories, setDoGetDailyCalories] = useState(false);
+
+    const [modalVisible, setModalVisible] = useState(false);
+    const [modalPoN, setModalPoN] = useState("/");
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalCalorie, setModalCalorie] = useState("");
+
+    const [modalInputVisible, setModalInputVisible] = useState(false);
+    const [modalInputNewCal, setModalInputNewCal] = useState(0);
+
+    const takenCalFlex = () => {
+        return 1 - remainingFlex();
+    };
+    const remainingFlex = () => {
+        return (
+            Math.round(
+                (takenCalorie / dailyLimitCalorie + Number.EPSILON) * 100
+            ) / 100
+        );
+    };
 
     I18nManager.forceRTL(false);
 
@@ -54,47 +61,91 @@ const App = () => {
         IRANSans: require("./assets/fonts/IRANSans.ttf"),
     });
 
-    // consoledebug(1);
+    const windowHeight = useWindowDimensions().height;
 
     //  daily data key -> @daily_data
-    //  calorie data key -> @calorie_data
+    //  daily calorie limit -> @calorie_limit
     const storeData = async (key, value) => {
         try {
             const jsonValue = JSON.stringify(value);
             await AsyncStorage.setItem(key, jsonValue);
-            setCalorieData(jsonValue);
         } catch (e) {
-            console.debug(e);
+            // console.error(e);
         }
+    };
+    const clearAsyncStorage = async () => {
+        storeData("@daily_data", "[]");
+        setDoGetDailyCalories();
     };
 
     const getDailyData = async () => {
         try {
-            var jsonValue = await AsyncStorage.getItem("@daily_data");
-            var result = [];
-            jsonValue = jsonValue ? JSON.parse(jsonValue) : [];
-            var id = 0;
-            for (let k in jsonValue) {
-                result.push({ id: id, title: k, calorie: jsonValue[k] });
-                id++;
-            }
-            console.debug(result);
-            setDailyData(result);
+            var arr = await AsyncStorage.getItem("@daily_data");
+            arr = arr ? JSON.parse(JSON.parse(arr) + "") : [];
+            setDailyData(arr);
+            var calSum = 0;
+            arr.forEach((obj) => {
+                calSum += obj.calorie;
+            });
+            setTakenCalorie(calSum);
         } catch (e) {
-            console.error(e);
+            console.log(e);
+        }
+    };
+    const getFoodCal = async (key) => {
+        try {
+            var cal = await AsyncStorage.getItem(key);
+            cal = cal ? cal : "";
+            setModalCalorie(cal);
+        } catch (e) {
+            //
+        }
+    };
+
+    const getCalorieLimit = async (key) => {
+        try {
+            var limitCal = await AsyncStorage.getItem("@calorie_limit");
+            limitCal = limitCal ? parseInt(limitCal) : 2000;
+            setDailyLimitCalorie(limitCal);
+        } catch (e) {}
+    };
+
+    const modalConfirmHandler = () => {
+        if (modalTitle !== "" && modalCalorie !== "") {
+            var title = modalTitle.toString();
+            var calorie =
+                modalPoN === "+"
+                    ? Math.abs(parseInt(modalCalorie))
+                    : -Math.abs(parseInt(modalCalorie));
+            var key = title.split(/\s/).join("");
+            key = `@${key}`;
+            var id = dailyData.length;
+            storeData(key, calorie);
+
+            var newDailyData = [...dailyData];
+            newDailyData.push({ id: id, title: title, calorie: calorie });
+            storeData("@daily_data", JSON.stringify(newDailyData));
+            setModalTitle("");
+            setModalCalorie("");
+            setModalPoN("/");
+            setDoGetDailyCalories(!doGetDailyCalories);
+            setModalVisible(false);
         }
     };
     useEffect(() => {
-        console.debug(1);
+        // clearAsyncStorage();
+    }, []);
+    useEffect(() => {
         getDailyData();
+        getCalorieLimit();
     }, [doGetDailyCalories]);
 
     const renderItem = ({ item }) => (
         <TouchableOpacity>
             <View style={styles.listItem}>
-                <Text style={styles.txt}>{item.title}</Text>
-                <Text style={styles.br}>..................</Text>
-                <Text style={styles.txt}>{item.calorie}</Text>
+                <Text style={styles.txt1}>{item.title}</Text>
+                {/* <Text style={styles.br}>..................</Text> */}
+                <Text style={styles.txt2}>{item.calorie}</Text>
             </View>
         </TouchableOpacity>
     );
@@ -103,21 +154,46 @@ const App = () => {
     }
 
     return (
-        <SafeAreaView>
+        <SafeAreaView style={[{ minHeight: Math.round(windowHeight) }]}>
             <View style={styles.mainContainer}>
                 <View style={styles.calorieStatusContainer}>
-                    <TouchableOpacity style={{ alignItems: "center" }}>
+                    <TouchableOpacity
+                        style={{ alignItems: "center" }}
+                        onPress={() => {
+                            setModalInputVisible(true);
+                        }}
+                    >
                         <View style={styles.percentContainer}>
-                            <View style={styles.eatenPart}></View>
-                            <View style={styles.remainingPart}></View>
+                            <View
+                                style={[
+                                    styles.eatenPart,
+                                    {
+                                        flex: takenCalFlex(),
+                                    },
+                                ]}
+                            ></View>
+                            <View
+                                style={[
+                                    styles.remainingPart,
+                                    {
+                                        flex: remainingFlex(),
+                                    },
+                                ]}
+                            ></View>
                         </View>
                         <Text style={styles.calorieRemaining}>
-                            400 کالری باقی‌مانده
+                            {dailyLimitCalorie - takenCalorie} کالری باقی‌مانده
                         </Text>
                     </TouchableOpacity>
                 </View>
                 <View style={styles.buttonsContainer}>
-                    <TouchableOpacity style={[styles.btnTop]}>
+                    <TouchableOpacity
+                        style={[styles.btnTop]}
+                        onPress={() => {
+                            setModalPoN("+");
+                            setModalVisible(true);
+                        }}
+                    >
                         <Ionicons
                             style={styles.positiveButton}
                             name="add-outline"
@@ -126,7 +202,10 @@ const App = () => {
                         />
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={[styles.btnTop]}>
+                    <TouchableOpacity
+                        style={[styles.btnTop]}
+                        onPress={clearAsyncStorage}
+                    >
                         <FontAwesome
                             style={styles.positiveButton}
                             name="rotate-left"
@@ -134,7 +213,13 @@ const App = () => {
                             color="#949995"
                         />
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.btnTop]}>
+                    <TouchableOpacity
+                        style={[styles.btnTop]}
+                        onPress={() => {
+                            setModalPoN("-");
+                            setModalVisible(true);
+                        }}
+                    >
                         <Ionicons
                             style={styles.positiveButton}
                             name="ios-remove-outline"
@@ -143,13 +228,171 @@ const App = () => {
                         />
                     </TouchableOpacity>
                 </View>
-                <Text>{calorieData}</Text>
                 <FlatList
                     style={styles.listContainer}
                     data={dailyData}
                     renderItem={renderItem}
-                    keyExtractor={(item) => item.id.toString()}
+                    keyExtractor={
+                        (item) => (item.id ? item["id"].toString() : "")
+                        // item[id].toString()
+                    }
                 />
+                {/* {dailyData &&
+                        dailyData.length > 0 &&
+                        dailyData.map((jsn) => {
+                            return (
+                                <TouchableOpacity>
+                                    <View style={styles.listItem}>
+                                        <Text style={styles.txt}>
+                                            {jsn.title}
+                                        </Text>
+                                        <Text style={styles.br}>
+                                            ..................
+                                        </Text>
+                                        <Text style={styles.txt}>
+                                            {jsn.calorie}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+                </ScrollView> */}
+
+                <Modal
+                    animationType="none"
+                    transparent={true}
+                    visible={modalVisible}
+                    onRequestClose={() => {
+                        setModalVisible(false);
+                        setModalPoN("/");
+                    }}
+                    backdrop={false}
+                >
+                    <View
+                        style={[
+                            styles.modalMainContainer,
+                            {
+                                minHeight:
+                                    (Math.round(windowHeight) * 55) / 100,
+                            },
+                        ]}
+                    >
+                        <View style={styles.ModalTemp}>
+                            <View style={styles.modalInputsContainer}>
+                                {modalPoN === "+" && (
+                                    <Text style={styles.modalText}>
+                                        نام غذا:
+                                    </Text>
+                                )}
+                                {modalPoN === "-" && (
+                                    <Text style={styles.modalText}>
+                                        نام فعالیت:
+                                    </Text>
+                                )}
+                                <TextInput
+                                    onChangeText={(value) => {
+                                        setModalTitle(value);
+                                    }}
+                                    style={styles.modalTextInput1}
+                                ></TextInput>
+                            </View>
+                            <View style={styles.modalInputsContainer}>
+                                <Text style={styles.modalText}>
+                                    مقدار کالری:
+                                </Text>
+                                <View style={styles.ModalCalorieInputContainer}>
+                                    <TextInput
+                                        onChangeText={(value) => {
+                                            setModalCalorie(value);
+                                        }}
+                                        keyboardType="numeric"
+                                        style={styles.modalTextInput2}
+                                        value={modalCalorie}
+                                    ></TextInput>
+                                    <Octicons
+                                        name="search"
+                                        size={25}
+                                        color="black"
+                                        style={styles.magnifier}
+                                        onPress={() => {
+                                            var title = modalTitle.toString();
+                                            var key = title
+                                                .split(/\s/)
+                                                .join("");
+                                            key = `@${key}`;
+                                            getFoodCal(key);
+                                        }}
+                                    />
+                                </View>
+                            </View>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.modalConfirm}
+                            onPress={modalConfirmHandler}
+                        >
+                            <Text style={styles.modalConfirmText}>تایید</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.modalCancel}
+                            onPress={() => {
+                                setModalTitle("");
+                                setModalCalorie("");
+                                setModalPoN("/");
+                                setModalVisible(false);
+                            }}
+                        >
+                            <Text style={styles.modalCancelText}>لغو</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Modal>
+                <Modal
+                    animationType="none"
+                    transparent={true}
+                    visible={modalInputVisible}
+                    onRequestClose={() => {
+                        setModalInputVisible(false);
+                    }}
+                    backdrop={false}
+                >
+                    <View
+                        style={[
+                            styles.secondModalMainContainer,
+                            {
+                                minHeight:
+                                    (Math.round(windowHeight) * 32) / 100,
+                            },
+                        ]}
+                    >
+                        <Text style={styles.modalInputTitleText}>
+                            حداکثر کالری روزانه:
+                        </Text>
+                        <TextInput
+                            style={styles.modalTextInput1}
+                            onChangeText={(value) => {
+                                setModalInputNewCal(value);
+                            }}
+                            keyboardType="numeric"
+                            style={styles.modalInputInput}
+                        ></TextInput>
+                        <TouchableOpacity
+                            style={styles.modalInputButton}
+                            onPress={() => {
+                                if (modalInputNewCal > 1) {
+                                    storeData(
+                                        "@calorie_limit",
+                                        parseInt(modalInputNewCal)
+                                    );
+                                    setDoGetDailyCalories(!doGetDailyCalories);
+                                    setModalInputVisible(false);
+                                }
+                            }}
+                        >
+                            <Text style={styles.modalInputButtonText}>
+                                تایید
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </Modal>
             </View>
         </SafeAreaView>
     );
@@ -181,13 +424,13 @@ const styles = StyleSheet.create({
         alignItems: "center",
     },
     eatenPart: {
-        flex: 0.33,
+        // flex: 0.9,
         width: "100%",
         height: "100%",
         backgroundColor: "#14b827",
     },
     remainingPart: {
-        flex: 0.676,
+        // flex: 0.1,
         height: "100%",
         backgroundColor: "#b80d1b",
     },
@@ -237,19 +480,160 @@ const styles = StyleSheet.create({
         padding: 10,
         flexDirection: "row-reverse",
         justifyContent: "space-between",
-        // alignItems: "center",
+        alignItems: "flex-start",
         marginTop: 15,
         borderBottomWidth: 0.5,
         borderBottomColor: "#999",
     },
     br: {
-        flex: 3,
+        flex: 1,
         textAlign: "center",
+        // backgroundColor: "#f00",
     },
-    txt: {
-        textAlign: "center",
+    txt1: {
+        marginRight: 5,
+        textAlign: "right",
+        flex: 2,
+        fontSize: 22,
+        fontFamily: "IRANSans",
+    },
+    txt2: {
+        marginLeft: 5,
+        textAlign: "left",
         flex: 1,
         fontSize: 22,
         fontFamily: "IRANSans",
+    },
+
+    modalMainContainer: {
+        width: "80%",
+        height: "55%",
+        backgroundColor: "#FFF",
+        alignSelf: "center",
+        marginTop: "35%",
+        borderWidth: 0.3,
+        borderRadius: 5,
+        justifyContent: "flex-start",
+        alignItems: "center",
+    },
+    ModalTemp: {
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        width: "100%",
+    },
+    modalInputsContainer: {
+        marginTop: "20%",
+        justifyContent: "center",
+        alignItems: "center",
+        width: "100%",
+    },
+    modalText: {
+        fontSize: 20,
+    },
+    modalTextInput1: {
+        fontSize: 17,
+        marginTop: 5,
+        width: "70%",
+        backgroundColor: "#eee",
+        height: 40,
+        padding: 10,
+        textAlign: "center",
+        borderRadius: 5,
+    },
+    modalTextInput2: {
+        fontSize: 17,
+        marginTop: 5,
+        width: "100%",
+        backgroundColor: "#eee",
+        height: 40,
+        padding: 10,
+        textAlign: "center",
+        borderRadius: 5,
+    },
+    ModalCalorieInputContainer: {
+        position: "relative",
+        flexDirection: "row",
+        justifyContent: "center",
+        alignItems: "center",
+        width: "70%",
+        // backgroundColor: "#000",
+        height: 40,
+    },
+    magnifier: {
+        position: "absolute",
+        right: 0,
+        padding: 5,
+    },
+    modalConfirm: {
+        marginTop: "15%",
+        width: "35%",
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#efe",
+        borderWidth: 0.5,
+        borderRadius: 5,
+        height: 40,
+        borderColor: "#091",
+    },
+    modalCancel: {
+        marginTop: 10,
+        width: "35%",
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#fef",
+        borderWidth: 0.5,
+        borderRadius: 5,
+        height: 40,
+        borderColor: "#901",
+    },
+    modalConfirmText: {
+        fontSize: 18,
+        color: "#091",
+    },
+    modalCancelText: {
+        fontSize: 18,
+        color: "#901",
+    },
+    secondModalMainContainer: {
+        width: "70%",
+        height: "30%",
+        backgroundColor: "#FFF",
+        alignSelf: "center",
+        marginTop: "35%",
+        borderWidth: 0.3,
+        borderRadius: 5,
+        justifyContent: "flex-start",
+        alignItems: "center",
+    },
+    modalInputButton: {
+        marginTop: "10%",
+        width: "35%",
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#ffffff",
+        borderWidth: 0.5,
+        borderRadius: 5,
+        height: 40,
+        borderColor: "#444",
+    },
+    modalInputButtonText: {
+        fontSize: 18,
+        color: "#444",
+    },
+    modalInputTitleText: {
+        marginTop: "20%",
+        fontSize: 22,
+        fontFamily: "IRANSans",
+    },
+    modalInputInput: {
+        fontSize: 17,
+        marginTop: 5,
+        width: "60%",
+        backgroundColor: "#eee",
+        height: 40,
+        padding: 10,
+        textAlign: "center",
+        borderRadius: 5,
     },
 });
