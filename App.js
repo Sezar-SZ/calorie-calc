@@ -44,6 +44,11 @@ const App = () => {
     const [modalInputVisible, setModalInputVisible] = useState(false);
     const [modalInputNewCal, setModalInputNewCal] = useState(0);
 
+    const [modalEditVisible, setModalEditVisible] = useState(false);
+    const [modalEditTitle, setModalEditTitle] = useState("");
+    const [modalEditCal, setModalEditCal] = useState("");
+    const [recordEditID, setRecordEditID] = useState(null);
+
     const takenCalFlex = () => {
         return 1 - remainingFlex();
     };
@@ -95,7 +100,7 @@ const App = () => {
     const getFoodCal = async (key) => {
         try {
             var cal = await AsyncStorage.getItem(key);
-            cal = cal ? cal : "";
+            cal = cal ? Math.abs(parseInt(cal)).toString() : "";
             setModalCalorie(cal);
         } catch (e) {
             //
@@ -132,6 +137,57 @@ const App = () => {
             setModalVisible(false);
         }
     };
+
+    const modalEditInit = (id) => {
+        var cal = dailyData[id].calorie;
+        if (cal > 0) setModalPoN("+");
+        else setModalPoN("-");
+        setModalEditTitle(dailyData[id].title);
+        setModalEditCal(Math.abs(cal).toString());
+    };
+    const modalEditDeleteHandler = () => {
+        var newDailyData = [...dailyData];
+        newDailyData[recordEditID].title = "";
+        newDailyData[recordEditID].calorie = 0;
+        storeData("@daily_data", JSON.stringify(newDailyData));
+        setModalEditTitle("");
+        setModalEditCal("");
+        setModalTitle("");
+        setModalCalorie("");
+        setModalPoN("/");
+        setDoGetDailyCalories(!doGetDailyCalories);
+        setModalEditVisible(false);
+    };
+    const modalEditUpateHandler = () => {
+        var newDailyData = [...dailyData];
+        var newTitle = modalEditTitle;
+        var newCal = modalEditCal;
+
+        var key = newTitle.split(/\s/).join("");
+        key = `@${key}`;
+        storeData(
+            key,
+            modalPoN === "+"
+                ? Math.abs(parseInt(newCal))
+                : -Math.abs(parseInt(newCal))
+        );
+
+        newDailyData[recordEditID].title = newTitle;
+        newDailyData[recordEditID].calorie =
+            modalPoN === "+"
+                ? Math.abs(parseInt(newCal))
+                : -Math.abs(parseInt(newCal));
+
+        storeData("@daily_data", JSON.stringify(newDailyData));
+        setModalEditTitle("");
+        setModalEditCal("");
+        setModalTitle("");
+        setModalCalorie("");
+        setModalPoN("/");
+        setDoGetDailyCalories(!doGetDailyCalories);
+        setModalEditVisible(false);
+    };
+
     useEffect(() => {
         // clearAsyncStorage();
     }, []);
@@ -141,13 +197,23 @@ const App = () => {
     }, [doGetDailyCalories]);
 
     const renderItem = ({ item }) => (
-        <TouchableOpacity>
-            <View style={styles.listItem}>
-                <Text style={styles.txt1}>{item.title}</Text>
-                {/* <Text style={styles.br}>..................</Text> */}
-                <Text style={styles.txt2}>{item.calorie}</Text>
-            </View>
-        </TouchableOpacity>
+        <>
+            {item.title !== "" && item.calorie !== 0 && (
+                <TouchableOpacity
+                    onLongPress={() => {
+                        setRecordEditID(item.id);
+                        modalEditInit(item.id);
+                        setModalEditVisible(true);
+                    }}
+                >
+                    <View style={styles.listItem}>
+                        <Text style={styles.txt1}>{item.title}</Text>
+                        {/* <Text style={styles.br}>..................</Text> */}
+                        <Text style={styles.txt2}>{item.calorie}</Text>
+                    </View>
+                </TouchableOpacity>
+            )}
+        </>
     );
     if (!loaded) {
         return null;
@@ -237,34 +303,18 @@ const App = () => {
                         // item[id].toString()
                     }
                 />
-                {/* {dailyData &&
-                        dailyData.length > 0 &&
-                        dailyData.map((jsn) => {
-                            return (
-                                <TouchableOpacity>
-                                    <View style={styles.listItem}>
-                                        <Text style={styles.txt}>
-                                            {jsn.title}
-                                        </Text>
-                                        <Text style={styles.br}>
-                                            ..................
-                                        </Text>
-                                        <Text style={styles.txt}>
-                                            {jsn.calorie}
-                                        </Text>
-                                    </View>
-                                </TouchableOpacity>
-                            );
-                        })}
-                </ScrollView> */}
 
-                <Modal
+                <Modal //  Add new record Modal
                     animationType="none"
                     transparent={true}
                     visible={modalVisible}
                     onRequestClose={() => {
-                        setModalVisible(false);
+                        setModalEditTitle("");
+                        setModalEditCal("");
+                        setModalTitle("");
+                        setModalCalorie("");
                         setModalPoN("/");
+                        setModalVisible(false);
                     }}
                     backdrop={false}
                 >
@@ -345,7 +395,94 @@ const App = () => {
                         </TouchableOpacity>
                     </View>
                 </Modal>
-                <Modal
+                <Modal //  Edit a record modal
+                    animationType="none"
+                    transparent={true}
+                    visible={modalEditVisible}
+                    onRequestClose={() => {
+                        setModalEditTitle("");
+                        setModalEditCal("");
+                        setModalTitle("");
+                        setModalCalorie("");
+                        setModalPoN("/");
+                        setModalEditVisible(false);
+                    }}
+                >
+                    <View
+                        style={[
+                            styles.modalMainContainer,
+                            {
+                                minHeight:
+                                    (Math.round(windowHeight) * 55) / 100,
+                            },
+                        ]}
+                    >
+                        <View style={styles.ModalTemp}>
+                            <View style={styles.modalInputsContainer}>
+                                {modalPoN === "+" && (
+                                    <Text style={styles.modalText}>
+                                        نام غذا :
+                                    </Text>
+                                )}
+                                {modalPoN === "-" && (
+                                    <Text style={styles.modalText}>
+                                        نام فعالیت:
+                                    </Text>
+                                )}
+
+                                <TextInput
+                                    onChangeText={(value) => {
+                                        setModalEditTitle(value);
+                                    }}
+                                    value={modalEditTitle}
+                                    style={styles.modalTextInput1}
+                                ></TextInput>
+                            </View>
+                            <View style={styles.modalInputsContainer}>
+                                <Text style={styles.modalText}>
+                                    مقدار کالری:
+                                </Text>
+                                <View style={styles.ModalCalorieInputContainer}>
+                                    <TextInput
+                                        onChangeText={(value) => {
+                                            setModalEditCal(value);
+                                        }}
+                                        keyboardType="numeric"
+                                        value={modalEditCal}
+                                        style={styles.modalTextInput2}
+                                    ></TextInput>
+                                    <Octicons
+                                        name="search"
+                                        size={25}
+                                        color="black"
+                                        style={styles.magnifier}
+                                        onPress={() => {
+                                            var title = modalTitle.toString();
+                                            var key = title
+                                                .split(/\s/)
+                                                .join("");
+                                            key = `@${key}`;
+                                            getFoodCal(key);
+                                        }}
+                                    />
+                                </View>
+                            </View>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.modalConfirm}
+                            onPress={modalEditUpateHandler}
+                        >
+                            <Text style={styles.modalConfirmText}>تایید</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.modalCancel}
+                            onPress={modalEditDeleteHandler}
+                        >
+                            <Text style={styles.modalCancelText}>حذف</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Modal>
+                <Modal //  Set daily calorie limit modal
                     animationType="none"
                     transparent={true}
                     visible={modalInputVisible}
