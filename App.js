@@ -50,9 +50,11 @@ const App = () => {
     const [recordEditID, setRecordEditID] = useState(null);
 
     const takenCalFlex = () => {
+        if (takenCalorie >= dailyLimitCalorie) return 0.001;
         return 1 - remainingFlex();
     };
     const remainingFlex = () => {
+        if (takenCalorie >= dailyLimitCalorie) return 0.999;
         return (
             Math.round(
                 (takenCalorie / dailyLimitCalorie + Number.EPSILON) * 100
