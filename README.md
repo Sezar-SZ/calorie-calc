@@ -4,7 +4,7 @@
 
 ## How it works
 
-The App doesn't have an initialized value for each food. But instead, by using key-value storage, each food and its calorie is saved after entering by the user. It means the user should add the food's calorie for the first time but after that, he can easily search for the value rather than entering it manually.
+The App doesn't have an initialized value for each food. But instead, by using key-value storage, each food and its calorie is saved after entering by the user. It means the user should add the food's calorie for the first time but after that, they can easily search for the value rather than entering it manually.
 
 Other fun features available for users:
 
